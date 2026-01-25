@@ -1,0 +1,8 @@
+*.jar
+.clj-kondo/
+.cpcache/
+.lsp/
+.nrepl-port
+/trish
+resources/repos.edn
+target/
