@@ -191,18 +191,20 @@
   and open them in the browser."
   [issue-nums & {:keys [verbose]}]
   (doseq [issue-selector issue-nums]
-    (when-let [{:keys [repo number]} (open-issue-matching-issue-num issue-selector
-                                                                     :verbose verbose)]
+    (if-let [{:keys [repo number]}
+             (open-issue-matching-issue-num issue-selector
+                                            :verbose verbose)]
       (shell/sh "open"
                 (str "https://github.com/" repo
-                     "/issues/" number)))))
+                     "/issues/" number))
+      (println "No issue found."))))
 
 (defn workon-issue
   "Start working on an issue: add in-progress label, remove on-deck
   and blocked labels, assign to self."
   [issue-selector & {:keys [verbose]}]
   (when-let [{:keys [repo number]} (open-issue-matching-issue-num issue-selector
-                                                                   :verbose verbose)]
+                                                                  :verbose verbose)]
     (fetch/add-issue-labels repo number ["in-progress"] :verbose verbose)
     (fetch/remove-issue-label repo number "on-deck" :verbose verbose)
     (fetch/remove-issue-label repo number "blocked" :verbose verbose)
@@ -402,7 +404,7 @@
                  (map format-issue)
                  print-issues!)))))))
 
-(defn -main [& args]
+(defn run-main [& args]
   (let [{:keys [options arguments summary errors]}
         (cli/parse-opts args cli-options)]
     (cond
@@ -410,7 +412,7 @@
       (do
         (doseq [error errors]
           (println error))
-        (System/exit 1))
+        1)
 
       (:help options)
       (do
@@ -419,14 +421,19 @@
         (println "Usage: trish [OPTIONS] [ISSUE-NUMBER...]")
         (println)
         (println summary)
-        (System/exit 0))
+        0)
 
       (:version options)
       (do
         (println "0.0.1")
-        (System/exit 0))
+        0)
 
       :else
       (do
         (run arguments options)
-        (shutdown-agents)))))
+        0))))
+
+(defn -main [& args]
+  (let [ret (apply run-main args)]
+    (shutdown-agents)
+    (System/exit ret)))
