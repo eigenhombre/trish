@@ -4,8 +4,12 @@ A command-line tool for managing GitHub issues across multiple
 repositories. Query, filter, and manage issues without leaving the
 terminal.
 
-(Clojure port of the Common Lisp `iss` tool by @eigenhombre, assisted
-by Claude as an experiment.)
+Though it overlaps substantially with the `gh` tool, I have a set
+of specific use cases for my workflow across multiple issues that this
+tool facilitates.
+
+(This is a Clojure port of a similar Common Lisp implementation,
+created with the help of Claude, to test its capabilities.)
 
 ## Status
 
