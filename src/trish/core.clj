@@ -6,6 +6,7 @@
             [clojure.edn :as edn]
             [trish.fetch :as fetch]
             [trish.time :as time])
+  (:import [java.lang IllegalArgumentException])
   (:gen-class))
 
 (def repos
@@ -160,23 +161,35 @@
        all-issues
        (remove is-pr?)))
 
+(defn- maybe-parse-long [x]
+  (try
+    (parse-long x)
+    (catch IllegalArgumentException _)))
+
 (defn repo-issue-num
-  "Parse an issue selector like 'wipacrepo/fh_icm_api/99' into
-  repo and issue number."
+  "
+  Parse an issue selector like 'wipacrepo/fh_icm_api/99' into repo and
+  issue number.
+  "
   [issue-selector]
-  (let [[org repo num-str] (str/split issue-selector #"/")]
-    [(str org "/" repo) (parse-long num-str)]))
+  (let [[org repo num-str] (str/split issue-selector #"/")
+        num (maybe-parse-long num-str)]
+    (when num
+      [(str org "/" repo) (parse-long num-str)])))
 
 (defn issue-matches
-  "Check if an issue matches a selector (either a plain number or
-  org/repo/number format)."
+  "
+  Check if an issue matches a selector (either a plain number or
+  org/repo/number format).
+  "
   [{:keys [repo number]} issue-selector]
-  (if-let [num (parse-long issue-selector)]
+  (if-let [num (maybe-parse-long issue-selector)]
     (= number num)
     (let [[selector-repo selector-num] (repo-issue-num issue-selector)]
-      (and (= (str/lower-case repo)
-              (str/lower-case selector-repo))
-           (= number selector-num)))))
+      (when (and selector-repo selector-num)
+        (and (= (str/lower-case repo)
+                (str/lower-case selector-repo))
+             (= number selector-num))))))
 
 (defn open-issue-matching-issue-num
   "Find an open issue matching the given issue number or selector."
@@ -191,20 +204,22 @@
   and open them in the browser."
   [issue-nums & {:keys [verbose]}]
   (doseq [issue-selector issue-nums]
-    (if-let [{:keys [repo number]}
-             (open-issue-matching-issue-num issue-selector
-                                            :verbose verbose)]
-      (shell/sh "open"
-                (str "https://github.com/" repo
-                     "/issues/" number))
-      (println "No issue found."))))
+    (let [{:keys [repo number]}
+          (open-issue-matching-issue-num issue-selector
+                                         :verbose verbose)]
+      (if number
+        (shell/sh "open"
+                  (str "https://github.com/" repo
+                       "/issues/" number))
+        (println "No issue found.")))))
 
 (defn workon-issue
   "Start working on an issue: add in-progress label, remove on-deck
   and blocked labels, assign to self."
   [issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number]} (open-issue-matching-issue-num issue-selector
-                                                                  :verbose verbose)]
+  (when-let [{:keys [repo number]}
+             (open-issue-matching-issue-num issue-selector
+                                            :verbose verbose)]
     (fetch/add-issue-labels repo number ["in-progress"] :verbose verbose)
     (fetch/remove-issue-label repo number "on-deck" :verbose verbose)
     (fetch/remove-issue-label repo number "blocked" :verbose verbose)
@@ -215,7 +230,7 @@
   as the given issue."
   [issue-selector & {:keys [verbose]}]
   (when-let [{:keys [repo]} (open-issue-matching-issue-num issue-selector
-                                                            :verbose verbose)]
+                                                           :verbose verbose)]
     (shell/sh "open"
               (str "https://github.com/" repo "/issues/new"))))
 
@@ -309,6 +324,22 @@
   (run! print coll)
   (flush))
 
+(defn present-issues
+  "
+  Common presentation logic for issues: apply bugs filter, sort, open in
+  browser if requested, format and print.
+  "
+  [issues options & {:keys [sort-key]}]
+  (let [filtered (cond->> issues
+                   (:bugs options) (filter bug-issue?))
+        sorted (if sort-key
+                 (sort-by sort-key filtered)
+                 filtered)]
+    (->> sorted
+         (map #(open-if-needed (:web options) %))
+         (map format-issue)
+         print-issues!)))
+
 (defn run [arguments options]
   (let [verbose (:verbose options)]
     (when verbose
@@ -345,32 +376,25 @@
 
       ;; Handle display options:
       (:my-issues options)
-      (->> (my-issues :verbose verbose)
-           (map issue-summary)
-           (sort-by :updated_at)
-           (map #(open-if-needed (:web options) %))
-           (map format-issue)
-           print-issues!)
+      (let [issues (->> (my-issues :verbose verbose)
+                        (map issue-summary))]
+        (present-issues issues options :sort-key :updated_at))
 
       (:in-progress options)
-      (->> (all-fetches repos :state "open" :verbose verbose)
-           all-issues
-           (remove is-pr?)
-           (map issue-summary)
-           (filter in-progress-issue?)
-           (map #(open-if-needed (:web options) %))
-           (map format-issue)
-           print-issues!)
+      (let [issues (->> (all-fetches repos :state "open" :verbose verbose)
+                        all-issues
+                        (remove is-pr?)
+                        (map issue-summary)
+                        (filter in-progress-issue?))]
+        (present-issues issues options))
 
       (:recent options)
-      (->> (all-fetches repos :state "open" :verbose verbose)
-           all-issues
-           (remove is-pr?)
-           (map issue-summary)
-           (filter #(recently-updated-issue? 30 %))
-           (sort-by :updated_at)
-           (map format-issue)
-           print-issues!)
+      (let [issues (->> (all-fetches repos :state "open" :verbose verbose)
+                        all-issues
+                        (remove is-pr?)
+                        (map issue-summary)
+                        (filter #(recently-updated-issue? 30 %)))]
+        (present-issues issues options :sort-key :updated_at))
 
       ;; Default behavior:
       :else
@@ -386,23 +410,14 @@
                                    (remove is-pr?))]
         (if (:raw options)
           (clojure.pprint/pprint non-pr-raw-issues)
-          (let [summarized (map issue-summary non-pr-raw-issues)
-                filtered (cond
-                           (:on-deck options)
-                           (filter on-deck-issue? summarized)
-
-                           (:bugs options)
-                           (filter bug-issue? summarized)
-
-                           :else
-                           (->> summarized
-                                (filter closed-by-me?)
-                                (filter #(recently-closed-issue? 63 %))
-                                (sort-by issue-closed-at)))]
-            (->> filtered
-                 (map #(open-if-needed (:web options) %))
-                 (map format-issue)
-                 print-issues!)))))))
+          (let [summarized (map issue-summary non-pr-raw-issues)]
+            (if (:on-deck options)
+              (present-issues (filter on-deck-issue? summarized) options)
+              (present-issues (->> summarized
+                                   (filter closed-by-me?)
+                                   (filter #(recently-closed-issue? 63 %)))
+                              options
+                              :sort-key :closed_at))))))))
 
 (defn run-main [& args]
   (let [{:keys [options arguments summary errors]}
