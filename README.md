@@ -4,7 +4,12 @@ A command-line tool for managing GitHub issues across multiple
 repositories. Query, filter, and manage issues without leaving the
 terminal.
 
-(Clojure port of the Common Lisp `iss` tool by @eigenhombre.)
+(Clojure port of the Common Lisp `iss` tool by @eigenhombre, assisted
+by Claude as an experiment.)
+
+## Status
+
+In daily use by me (@eigenhombre).
 
 ## Features
 
