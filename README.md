@@ -2,6 +2,8 @@
 
 [![Build](https://github.com/eigenhombre/trish/actions/workflows/build.yml/badge.svg)](https://github.com/eigenhombre/trish/actions/workflows/build.yml)
 
+trish - TRack ISsues Helpfully
+
 A command-line tool for managing GitHub issues across multiple
 repositories. Query, filter, and manage issues without leaving the
 terminal.
@@ -11,7 +13,7 @@ of specific use cases for my workflow across multiple issues that this
 tool facilitates.
 
 This is a Clojure port, created with the help of Claude, of a similar,
-unpublished Common Lisp implementation.
+unpublished Common Lisp implementation, `iss`.
 
 ## Status
 
