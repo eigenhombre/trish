@@ -1,5 +1,7 @@
 # trish - GitHub Issues CLI (Clojure)
 
+[![Build](https://github.com/eigenhombre/trish/actions/workflows/build.yml/badge.svg)](https://github.com/eigenhombre/trish/actions/workflows/build.yml)
+
 A command-line tool for managing GitHub issues across multiple
 repositories. Query, filter, and manage issues without leaving the
 terminal.
