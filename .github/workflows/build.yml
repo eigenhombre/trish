@@ -23,5 +23,8 @@ jobs:
       with:
         cli: latest
 
+    - name: Create repos.edn for build
+      run: cp resources/repos.edn.example resources/repos.edn
+
     - name: Build uberjar
       run: clojure -T:build uber
