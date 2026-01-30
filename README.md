@@ -63,6 +63,9 @@ Add to your `~/.bashrc` or `~/.zshrc` to persist.
 ### Workflow Management
 
     trish --workon ISSUE       # Start work: in-progress, assign to self
+    trish --sibling ISSUE      # Create new issue sibling to supplied issue
+                               # (easiest way to make a new issue in a particular
+                               # repo)
     trish --take ISSUE         # Assign issue to yourself
     trish --drop ISSUE         # Unassign and remove workflow labels
     trish -c ISSUE             # Close issue and clean up labels
