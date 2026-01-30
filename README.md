@@ -8,8 +8,8 @@ Though it overlaps substantially with the `gh` tool, I have a set
 of specific use cases for my workflow across multiple issues that this
 tool facilitates.
 
-(This is a Clojure port of a similar Common Lisp implementation,
-created with the help of Claude, to test its capabilities.)
+This is a Clojure port, created with the help of Claude, of a similar,
+unpublished Common Lisp implementation.
 
 ## Status
 
