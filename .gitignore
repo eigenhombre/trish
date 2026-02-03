@@ -1,8 +1,10 @@
 *.jar
+.claude/
 .clj-kondo/
 .cpcache/
 .lsp/
 .nrepl-port
 /trish
+example.sh
 resources/repos.edn
 target/

@@ -276,9 +276,30 @@
   Remove blocked tag from an issue.
   "
   [issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number]} (open-issue-matching-issue-num issue-selector
-                                                                   :verbose verbose)]
+  (when-let [{:keys [repo number]}
+             (open-issue-matching-issue-num issue-selector
+                                            :verbose verbose)]
     (fetch/remove-issue-label repo number "blocked" :verbose verbose)))
+
+(defn tag-issue
+  "
+  Add an arbitrary tag to an issue.
+  "
+  [tag issue-selector & {:keys [verbose]}]
+  (when-let [{:keys [repo number]}
+             (open-issue-matching-issue-num issue-selector
+                                            :verbose verbose)]
+    (fetch/add-issue-labels repo number [tag] :verbose verbose)))
+
+(defn untag-issue
+  "
+  Remove an arbitrary tag from an issue.
+  "
+  [tag issue-selector & {:keys [verbose]}]
+  (when-let [{:keys [repo number]}
+             (open-issue-matching-issue-num issue-selector
+                                            :verbose verbose)]
+    (fetch/remove-issue-label repo number tag :verbose verbose)))
 
 (defn close-issue
   "
@@ -318,7 +339,11 @@
    ["-B" "--issue-blocked ISSUE" "Tag issue 'blocked'"
     :id :blocked]
    ["-u" "--issue-unblocked ISSUE" "Tag issue 'unblocked'"
-    :id :unblocked]])
+    :id :unblocked]
+   ["-t" "--tag TAG" "Add TAG to ISSUE (issue number as argument)"
+    :id :tag]
+   ["-x" "--untag TAG" "Remove TAG from ISSUE (issue number as argument)"
+    :id :untag]])
 
 (defn print-issues! [coll]
   (run! print coll)
@@ -345,6 +370,16 @@
     (when verbose
       (println "Arguments:" arguments "Options:" options))
     (cond
+      ;; Handle tag option (uses positional argument):
+      (:tag options)
+      (when (seq arguments)
+        (tag-issue (:tag options) (first arguments) :verbose verbose))
+
+      ;; Handle untag option (uses positional argument):
+      (:untag options)
+      (when (seq arguments)
+        (untag-issue (:untag options) (first arguments) :verbose verbose))
+
       ;; Handle positional arguments (issue numbers to open):
       (seq arguments)
       (open-issues arguments :verbose verbose)
