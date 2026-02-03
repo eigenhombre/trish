@@ -76,6 +76,8 @@ Add to your `~/.bashrc` or `~/.zshrc` to persist.
     trish --mkondeck ISSUE     # Add to on-deck queue
     trish -B ISSUE             # Mark issue as blocked
     trish -u ISSUE             # Unblock issue
+    trish -t TAG ISSUE         # Add arbitrary tag to issue
+    trish -x TAG ISSUE         # Remove tag from issue
 
 ### Opening in Browser
 
@@ -127,6 +129,23 @@ names in the format `"owner/repo"`:
 
 An example configuration file is provided at
 `resources/repos.edn.example` with example repositories.
+
+### Slack Notifications
+
+trish can send Slack notifications for workflow state changes. To
+enable, set the `TRISH_SLACK_WEBHOOK` environment variable to your
+Slack webhook URL:
+
+    export TRISH_SLACK_WEBHOOK="https://hooks.slack.com/services/..."
+
+When configured, notifications are sent for:
+- Adding tags (`-t`)
+- Removing tags (`-x`)
+- Starting work on an issue (`--workon`)
+- Moving issues to on-deck (`--mkondeck`)
+- Closing issues (`-c`)
+
+Notifications include clickable links to the GitHub issues.
 
 ### Display Settings
 

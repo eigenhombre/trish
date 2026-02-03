@@ -213,17 +213,40 @@
                        "/issues/" number))
         (println "No issue found.")))))
 
+(defn issue-link
+  "
+  Format an issue as a Slack clickable link.
+  "
+  [repo number]
+  (let [url (str "https://github.com/" repo "/issues/" number)
+        text (str repo "#" number)]
+    (str "<" url "|" text ">")))
+
+(defn send-slack-notification
+  "
+  Send a notification to Slack if TRISH_SLACK_WEBHOOK is defined.
+  "
+  [message]
+  (when-let [webhook (System/getenv "TRISH_SLACK_WEBHOOK")]
+    (let [json-payload (str "{\"text\":\"" message "\"}")]
+      (shell/sh "curl" "-X" "POST"
+                "-H" "Content-type: application/json"
+                "--data" json-payload
+                webhook))))
+
 (defn workon-issue
   "Start working on an issue: add in-progress label, remove on-deck
   and blocked labels, assign to self."
   [issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number]}
+  (when-let [{:keys [repo number title]}
              (open-issue-matching-issue-num issue-selector
                                             :verbose verbose)]
     (fetch/add-issue-labels repo number ["in-progress"] :verbose verbose)
     (fetch/remove-issue-label repo number "on-deck" :verbose verbose)
     (fetch/remove-issue-label repo number "blocked" :verbose verbose)
-    (fetch/set-issue-assignee repo number default-user :verbose verbose)))
+    (fetch/set-issue-assignee repo number default-user :verbose verbose)
+    (send-slack-notification
+     (str "Started work on " (issue-link repo number) ": " title))))
 
 (defn make-sibling-issue
   "Open a browser window to create a new issue in the same repo
@@ -257,10 +280,13 @@
   Add an issue to the on-deck queue.
   "
   [issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number]} (open-issue-matching-issue-num issue-selector
-                                                                   :verbose verbose)]
+  (when-let [{:keys [repo number title]}
+             (open-issue-matching-issue-num issue-selector
+                                            :verbose verbose)]
     (fetch/add-issue-labels repo number ["on-deck"] :verbose verbose)
-    (fetch/remove-issue-label repo number "in-progress" :verbose verbose)))
+    (fetch/remove-issue-label repo number "in-progress" :verbose verbose)
+    (send-slack-notification
+     (str "Moved " (issue-link repo number) " to on-deck: " title))))
 
 (defn tag-issue-as-blocked
   "
@@ -286,32 +312,39 @@
   Add an arbitrary tag to an issue.
   "
   [tag issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number]}
+  (when-let [{:keys [repo number title]}
              (open-issue-matching-issue-num issue-selector
                                             :verbose verbose)]
-    (fetch/add-issue-labels repo number [tag] :verbose verbose)))
+    (fetch/add-issue-labels repo number [tag] :verbose verbose)
+    (send-slack-notification
+     (str "Tagged " (issue-link repo number) " with '" tag "': " title))))
 
 (defn untag-issue
   "
   Remove an arbitrary tag from an issue.
   "
   [tag issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number]}
+  (when-let [{:keys [repo number title]}
              (open-issue-matching-issue-num issue-selector
                                             :verbose verbose)]
-    (fetch/remove-issue-label repo number tag :verbose verbose)))
+    (fetch/remove-issue-label repo number tag :verbose verbose)
+    (send-slack-notification
+     (str "Removed tag '" tag "' from " (issue-link repo number) ": " title))))
 
 (defn close-issue
   "
   Close an issue and remove workflow labels.
   "
   [issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number]} (open-issue-matching-issue-num issue-selector
-                                                                   :verbose verbose)]
+  (when-let [{:keys [repo number title]}
+             (open-issue-matching-issue-num issue-selector
+                                            :verbose verbose)]
     (fetch/remove-issue-label repo number "in-progress" :verbose verbose)
     (fetch/remove-issue-label repo number "on-deck" :verbose verbose)
     (fetch/remove-issue-label repo number "blocked" :verbose verbose)
-    (fetch/set-issue-state repo number "closed" :verbose verbose)))
+    (fetch/set-issue-state repo number "closed" :verbose verbose)
+    (send-slack-notification
+     (str "Closed " (issue-link repo number) ": " title))))
 
 (def cli-options
   [["-v" "--verbose" "Verbose output"]
