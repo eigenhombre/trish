@@ -235,12 +235,16 @@
                 webhook))))
 
 (defn workon-issue
-  "Start working on an issue: add in-progress label, remove on-deck
-  and blocked labels, assign to self."
+  "
+  Start working on an issue: reopen if closed, add in-progress label,
+  remove on-deck and blocked labels, assign to self.
+  "
   [issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number title]}
+  (when-let [{:keys [repo number title closed_at]}
              (open-issue-matching-issue-num issue-selector
                                             :verbose verbose)]
+    (when closed_at
+      (fetch/set-issue-state repo number "open" :verbose verbose))
     (fetch/add-issue-labels repo number ["in-progress"] :verbose verbose)
     (fetch/remove-issue-label repo number "on-deck" :verbose verbose)
     (fetch/remove-issue-label repo number "blocked" :verbose verbose)
@@ -346,6 +350,34 @@
     (send-slack-notification
      (str "Closed " (issue-link repo number) ": " title))))
 
+(defn read-multiline-input
+  "
+  Read multiple lines of input from stdin until EOF (control-D).
+  "
+  []
+  (println "Type your comment below...")
+  (str/join "\n" (line-seq (java.io.BufferedReader. *in*))))
+
+(defn comment-on-issue
+  "
+  Add a comment to an issue.
+  "
+  [issue-selector & {:keys [verbose]}]
+  (when-let [{:keys [repo number title]}
+             (open-issue-matching-issue-num issue-selector
+                                            :verbose verbose)]
+    (let [comment-text (read-multiline-input)
+          comment-id (fetch/add-issue-comment repo
+                                              number
+                                              comment-text
+                                              :verbose verbose)
+          comment-url (str "https://github.com/" repo "/issues/" number
+                           "#issuecomment-" comment-id)]
+      (send-slack-notification
+       (str "Commented on " (issue-link repo number) ": " title "\n"
+            comment-text "\n"
+            comment-url)))))
+
 (def cli-options
   [["-v" "--verbose" "Verbose output"]
    ["-V" "--version" "Display version and exit"]
@@ -376,7 +408,9 @@
    ["-t" "--tag TAG" "Add TAG to ISSUE (issue number as argument)"
     :id :tag]
    ["-x" "--untag TAG" "Remove TAG from ISSUE (issue number as argument)"
-    :id :untag]])
+    :id :untag]
+   ["-C" "--comment ISSUE" "Add comment to ISSUE"
+    :id :comment]])
 
 (defn print-issues! [coll]
   (run! print coll)
@@ -441,6 +475,9 @@
 
       (:unblocked options)
       (untag-issue-as-blocked (:unblocked options) :verbose verbose)
+
+      (:comment options)
+      (comment-on-issue (:comment options) :verbose verbose)
 
       ;; Handle display options:
       (:my-issues options)

@@ -169,3 +169,21 @@
     (http/patch url
                 {:headers (default-headers token)
                  :body body})))
+
+(defn add-issue-comment
+  "
+  Add a comment to a GitHub issue. Returns the comment ID.
+  "
+  [repo issue-number comment-text & {:keys [verbose]}]
+  (let [token (gh-token)
+        url (str "https://api.github.com/repos/" repo "/issues/"
+                 issue-number "/comments")
+        body (json/generate-string {:body comment-text})]
+    (when verbose
+      (println "POST" url "<-" body))
+    (-> (http/post url
+                   {:headers (default-headers token)
+                    :body body
+                    :as :json})
+        :body
+        :id)))
