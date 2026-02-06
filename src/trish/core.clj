@@ -264,20 +264,26 @@
 (defn take-issue
   "Assign an issue to yourself."
   [issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number]} (open-issue-matching-issue-num issue-selector
-                                                                   :verbose verbose)]
-    (fetch/set-issue-assignee repo number default-user :verbose verbose)))
+  (when-let [{:keys [repo number]} (open-issue-matching-issue-num
+                                    issue-selector
+                                    :verbose verbose)]
+    (fetch/set-issue-assignee repo number default-user :verbose verbose)
+    (send-slack-notification
+     (str "Self-assigned " (issue-link repo number)))))
 
 (defn drop-issue
   "
   Remove yourself from an issue and remove workflow labels.
   "
   [issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number]} (open-issue-matching-issue-num issue-selector
-                                                                   :verbose verbose)]
+  (when-let [{:keys [repo number]} (open-issue-matching-issue-num
+                                    issue-selector
+                                    :verbose verbose)]
     (fetch/remove-issue-assignee repo number default-user :verbose verbose)
     (fetch/remove-issue-label repo number "in-progress" :verbose verbose)
-    (fetch/remove-issue-label repo number "on-deck" :verbose verbose)))
+    (fetch/remove-issue-label repo number "on-deck" :verbose verbose)
+    (send-slack-notification
+     (str "Self-unassigned " (issue-link repo number)))))
 
 (defn make-on-deck-issue
   "
@@ -297,9 +303,12 @@
   Tag an issue as blocked.
   "
   [issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number]} (open-issue-matching-issue-num issue-selector
-                                                                   :verbose verbose)]
-    (fetch/add-issue-labels repo number ["blocked"] :verbose verbose)))
+  (when-let [{:keys [repo number]} (open-issue-matching-issue-num
+                                    issue-selector
+                                    :verbose verbose)]
+    (fetch/add-issue-labels repo number ["blocked"] :verbose verbose)
+    (send-slack-notification
+     (str "Tagged " (issue-link repo number) " as blocked."))))
 
 (defn untag-issue-as-blocked
   "
@@ -309,7 +318,9 @@
   (when-let [{:keys [repo number]}
              (open-issue-matching-issue-num issue-selector
                                             :verbose verbose)]
-    (fetch/remove-issue-label repo number "blocked" :verbose verbose)))
+    (fetch/remove-issue-label repo number "blocked" :verbose verbose)
+    (send-slack-notification
+     (str "Removed 'blocked' tag from " (issue-link repo number)))))
 
 (defn tag-issue
   "
