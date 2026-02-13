@@ -4,6 +4,7 @@
             [clojure.java.shell :as shell]
             [clojure.java.io :as io]
             [clojure.edn :as edn]
+            [cheshire.core :as json]
             [trish.fetch :as fetch]
             [trish.time :as time])
   (:import [java.lang IllegalArgumentException])
@@ -225,14 +226,24 @@
 (defn send-slack-notification
   "
   Send a notification to Slack if TRISH_SLACK_WEBHOOK is defined.
+  Returns true if successful, false otherwise.
   "
   [message]
   (when-let [webhook (System/getenv "TRISH_SLACK_WEBHOOK")]
-    (let [json-payload (str "{\"text\":\"" message "\"}")]
-      (shell/sh "curl" "-X" "POST"
-                "-H" "Content-type: application/json"
-                "--data" json-payload
-                webhook))))
+    (try
+      (let [json-payload (json/generate-string {:text message})
+            result (shell/sh "curl" "-X" "POST"
+                            "-H" "Content-type: application/json"
+                            "--data" json-payload
+                            webhook)]
+        (if (zero? (:exit result))
+          true
+          (do
+            (println "Slack notification failed:" (:err result))
+            false)))
+      (catch Exception e
+        (println "Failed to send Slack notification:" (.getMessage e))
+        false))))
 
 (defn workon-issue
   "
