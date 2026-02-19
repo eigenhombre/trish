@@ -372,13 +372,36 @@
     (send-slack-notification
      (str "Closed " (issue-link repo number) ": " title))))
 
+(defn- read-from-editor
+  "
+  Launch $VISUAL or $EDITOR with a temp file and return the saved text.
+  Returns nil if the saved content is blank.
+  "
+  [editor]
+  (let [tmp (java.io.File/createTempFile "trish-comment" ".txt")]
+    (try
+      (-> (ProcessBuilder. [editor (.getAbsolutePath tmp)])
+          (.inheritIO)
+          (.start)
+          (.waitFor))
+      (let [text (str/trim (slurp tmp))]
+        (if (str/blank? text)
+          (do (println "Aborting: empty comment.") nil)
+          text))
+      (finally
+        (.delete tmp)))))
+
 (defn read-multiline-input
   "
-  Read multiple lines of input from stdin until EOF (control-D).
+  Read comment text from the user. If $VISUAL or $EDITOR is set, opens that
+  editor on a temp file. Otherwise reads stdin until EOF (control-D).
   "
   []
-  (println "Type your comment below...")
-  (str/join "\n" (line-seq (java.io.BufferedReader. *in*))))
+  (if-let [editor (or (System/getenv "VISUAL") (System/getenv "EDITOR"))]
+    (read-from-editor editor)
+    (do
+      (println "Type your comment below...")
+      (str/join "\n" (line-seq (java.io.BufferedReader. *in*))))))
 
 (defn comment-on-issue
   "
@@ -388,17 +411,17 @@
   (when-let [{:keys [repo number title]}
              (open-issue-matching-issue-num issue-selector
                                             :verbose verbose)]
-    (let [comment-text (read-multiline-input)
-          comment-id (fetch/add-issue-comment repo
-                                              number
-                                              comment-text
-                                              :verbose verbose)
-          comment-url (str "https://github.com/" repo "/issues/" number
-                           "#issuecomment-" comment-id)]
-      (send-slack-notification
-       (str "Commented on " (issue-link repo number) ": " title "\n"
-            comment-text "\n"
-            comment-url)))))
+    (when-let [comment-text (read-multiline-input)]
+      (let [comment-id (fetch/add-issue-comment repo
+                                                number
+                                                comment-text
+                                                :verbose verbose)
+            comment-url (str "https://github.com/" repo "/issues/" number
+                             "#issuecomment-" comment-id)]
+        (send-slack-notification
+         (str "Commented on " (issue-link repo number) ": " title "\n"
+              comment-text "\n"
+              comment-url))))))
 
 (def cli-options
   [["-v" "--verbose" "Verbose output"]

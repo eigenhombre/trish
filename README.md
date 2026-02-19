@@ -78,6 +78,7 @@ Add to your `~/.bashrc` or `~/.zshrc` to persist.
     trish -u ISSUE             # Unblock issue
     trish -t TAG ISSUE         # Add arbitrary tag to issue
     trish -x TAG ISSUE         # Remove tag from issue
+    trish -C ISSUE             # Add a comment to an issue
 
 ### Opening in Browser
 
@@ -129,6 +130,16 @@ names in the format `"owner/repo"`:
 
 An example configuration file is provided at
 `resources/repos.edn.example` with example repositories.
+
+### Comment Editor
+
+When adding a comment (`-C`), trish checks `$VISUAL` then `$EDITOR`. If either
+is set, the editor is launched on a temporary file; save and quit to submit the
+comment. If neither is set, input is read from stdin until EOF (Ctrl+D).
+
+To use vim:
+
+    export VISUAL=vim
 
 ### Slack Notifications
 
