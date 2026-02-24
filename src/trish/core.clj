@@ -393,35 +393,140 @@
 
 (defn read-multiline-input
   "
-  Read comment text from the user. If $VISUAL or $EDITOR is set, opens that
-  editor on a temp file. Otherwise reads stdin until EOF (control-D).
+  Read comment text from the user. If $VISUAL or $EDITOR is set and
+  skip-editor? is false, opens that editor on a temp file. Otherwise reads
+  stdin until EOF (control-D).
   "
-  []
-  (if-let [editor (or (System/getenv "VISUAL") (System/getenv "EDITOR"))]
+  [& {:keys [skip-editor?]}]
+  (if-let [editor (and (not skip-editor?)
+                       (or (System/getenv "VISUAL")
+                           (System/getenv "EDITOR")))]
     (read-from-editor editor)
     (do
-      (println "Type your comment below...")
+      (when (System/console)
+        (println "Type your comment below (press Ctrl-D when done)..."))
       (str/join "\n" (line-seq (java.io.BufferedReader. *in*))))))
 
 (defn comment-on-issue
   "
   Add a comment to an issue.
   "
+  [issue-selector & {:keys [verbose skip-editor?]}]
+  (if-let [{:keys [repo number title]}
+           (open-issue-matching-issue-num issue-selector
+                                          :verbose verbose)]
+    (let [comment-text (read-multiline-input :skip-editor? skip-editor?)]
+      (if (and comment-text (not (clojure.string/blank? comment-text)))
+        (let [comment-id (fetch/add-issue-comment repo
+                                                  number
+                                                  comment-text
+                                                  :verbose verbose)
+              comment-url (str "https://github.com/" repo "/issues/" number
+                               "#issuecomment-" comment-id)]
+          (send-slack-notification
+           (str "Commented on " (issue-link repo number) ": " title "\n"
+                comment-text "\n"
+                comment-url)))
+        (println "Aborting: empty comment.")))
+    (println "No issue found:" issue-selector)))
+
+(defn format-issue-header
+  "
+  Format the header section of an issue with state, assignee, labels,
+  dates, and URL.
+  "
+  [issue repo number]
+  (let [state (:state issue)
+        assignees (map :login (:assignees issue))
+        labels (issue-label-names issue)
+        created (when-let [d (:created_at issue)] (subs d 0 10))
+        updated (when-let [d (:updated_at issue)] (subs d 0 10))
+        url (str "https://github.com/" repo "/issues/" number)]
+    (str "=== Issue #" number ": " (:title issue) " ===\n"
+         "State: " state "\n"
+         (when (seq assignees)
+           (str "Assignee: " (str/join ", " assignees) "\n"))
+         (when (seq labels)
+           (str "Labels: " (str/join ", " labels) "\n"))
+         "Created: " created "\n"
+         "Updated: " updated "\n"
+         "URL: " url "\n")))
+
+(defn format-issue-body
+  "
+  Format the description section of an issue.
+  "
+  [body]
+  (if (and body (not (str/blank? body)))
+    (str "\n--- Description ---\n" body "\n")
+    ""))
+
+(defn- extract-commit-info
+  "
+  Extract commit SHA and message from a timeline event.
+  Returns formatted string or nil if no commit ID.
+  "
+  [event]
+  (when-let [sha (:commit_id event)]
+    (let [short-sha (subs sha 0 7)
+          message (or (:message event)
+                      (str "commit " short-sha))]
+      (str short-sha " " message))))
+
+(defn format-commits-section
+  "
+  Format the commits section from timeline events.
+  "
+  [timeline-events]
+  (let [commit-events (filter #(= "referenced" (:event %))
+                              timeline-events)
+        commits (keep extract-commit-info commit-events)]
+    (if (seq commits)
+      (str "\n--- Commits Referencing This Issue ---\n"
+           (str/join "\n" commits)
+           "\n")
+      (str "\n--- Commits Referencing This Issue ---\n"
+           "No commits reference this issue\n"))))
+
+(defn format-comments
+  "
+  Format all comments with author and date.
+  "
+  [comments]
+  (if (seq comments)
+    (str "\n--- Comments (" (count comments) ") ---\n"
+         (str/join "\n\n"
+                   (map (fn [comment]
+                          (let [author (get-in comment [:user :login])
+                                date (when-let [d (:created_at comment)]
+                                       (subs d 0 10))
+                                body (:body comment)]
+                            (str "@" author " on " date ":\n" body)))
+                        comments))
+         "\n")
+    (str "\n--- Comments ---\n" "No comments\n")))
+
+(defn show-issue
+  "
+  Show detailed information about an issue including state, commits,
+  and comments.
+  "
   [issue-selector & {:keys [verbose]}]
-  (when-let [{:keys [repo number title]}
-             (open-issue-matching-issue-num issue-selector
-                                            :verbose verbose)]
-    (when-let [comment-text (read-multiline-input)]
-      (let [comment-id (fetch/add-issue-comment repo
-                                                number
-                                                comment-text
-                                                :verbose verbose)
-            comment-url (str "https://github.com/" repo "/issues/" number
-                             "#issuecomment-" comment-id)]
-        (send-slack-notification
-         (str "Commented on " (issue-link repo number) ": " title "\n"
-              comment-text "\n"
-              comment-url))))))
+  (if-let [{:keys [repo number]}
+           (open-issue-matching-issue-num issue-selector
+                                          :verbose verbose)]
+    (let [issue (fetch/fetch-single-issue repo number :verbose verbose)
+          comments (fetch/fetch-issue-comments repo
+                                               number
+                                               :verbose verbose)
+          timeline (fetch/fetch-issue-timeline repo
+                                               number
+                                               :verbose verbose)]
+      (println (format-issue-header issue repo number))
+      (println (format-issue-body (:body issue)))
+      (println (format-commits-section timeline))
+      (println (format-comments comments)))
+    (println "No issue found.")))
 
 (def cli-options
   [["-v" "--verbose" "Verbose output"]
@@ -454,8 +559,11 @@
     :id :tag]
    ["-x" "--untag TAG" "Remove TAG from ISSUE (issue number as argument)"
     :id :untag]
-   ["-C" "--comment ISSUE" "Add comment to ISSUE"
-    :id :comment]])
+   ["-C" "--comment" "Add comment to ISSUE (issue number as argument)"
+    :id :comment]
+   [nil "--plain" "Read comment from stdin (skip editor)"]
+   [nil "--show ISSUE" "Show detailed issue information"
+    :id :show]])
 
 (defn print-issues! [coll]
   (run! print coll)
@@ -492,6 +600,14 @@
       (when (seq arguments)
         (untag-issue (:untag options) (first arguments) :verbose verbose))
 
+      ;; Handle comment option (uses positional argument):
+      (:comment options)
+      (if (seq arguments)
+        (comment-on-issue (first arguments)
+                          :verbose verbose
+                          :skip-editor? (:plain options))
+        (println "Error: --comment requires an issue number"))
+
       ;; Handle positional arguments (issue numbers to open):
       (seq arguments)
       (open-issues arguments :verbose verbose)
@@ -521,8 +637,8 @@
       (:unblocked options)
       (untag-issue-as-blocked (:unblocked options) :verbose verbose)
 
-      (:comment options)
-      (comment-on-issue (:comment options) :verbose verbose)
+      (:show options)
+      (show-issue (:show options) :verbose verbose)
 
       ;; Handle display options:
       (:my-issues options)

@@ -187,3 +187,87 @@
                     :as :json})
         :body
         :id)))
+
+(defn fetch-single-issue
+  "
+  Fetch detailed information for a single GitHub issue.
+  "
+  [repo issue-number & {:keys [verbose]}]
+  (let [token (gh-token)
+        url (str "https://api.github.com/repos/" repo "/issues/"
+                 issue-number)]
+    (when verbose
+      (println "GET" url))
+    (try
+      (-> (http/get url
+                    {:headers (default-headers token)
+                     :as :json})
+          :body)
+      (catch Exception e
+        (throw (ex-info (str "Failed to fetch issue " repo "#"
+                             issue-number)
+                        {:repo repo
+                         :issue-number issue-number}
+                        e))))))
+
+(defn- fetch-paginated
+  "
+  Fetch paginated GitHub API results.
+  "
+  [url-fn headers & {:keys [page verbose]
+                     :or {page 1}}]
+  (let [url (url-fn page)]
+    (when verbose
+      (println "GET" url))
+    (try
+      (let [response (-> (http/get url
+                                   {:headers headers
+                                    :as :json})
+                         :body)]
+        (if (seq response)
+          (concat response
+                  (fetch-paginated url-fn
+                                   headers
+                                   :page (inc page)
+                                   :verbose verbose))
+          response))
+      (catch Exception e
+        (throw (ex-info (str "Failed to fetch paginated results from "
+                             url)
+                        {:url url :page page}
+                        e))))))
+
+(defn fetch-issue-comments
+  "
+  Fetch all comments for a GitHub issue with pagination.
+  "
+  [repo issue-number & {:keys [verbose]}]
+  (let [token (gh-token)
+        url-fn (fn [page]
+                 (build-url
+                  (str "/repos/" repo "/issues/" issue-number
+                       "/comments")
+                  [["per_page" "100"]
+                   ["page" (str page)]]))]
+    (fetch-paginated url-fn
+                     (default-headers token)
+                     :verbose verbose)))
+
+(defn fetch-issue-timeline
+  "
+  Fetch timeline events for a GitHub issue, including
+  commit references.
+  "
+  [repo issue-number & {:keys [verbose]}]
+  (let [token (gh-token)
+        url-fn (fn [page]
+                 (build-url
+                  (str "/repos/" repo "/issues/" issue-number
+                       "/timeline")
+                  [["per_page" "100"]
+                   ["page" (str page)]]))
+        headers (assoc (default-headers token)
+                       "Accept"
+                       (str "application/vnd.github"
+                            ".mockingbird-preview+json"))]
+    (fetch-paginated url-fn headers :verbose verbose)))
