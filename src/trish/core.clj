@@ -69,6 +69,44 @@
        (take 2)
        (str/join "/")))
 
+(defn git-remote-url->repo
+  "
+  Extract repository name from a git remote URL.
+  Examples:
+    git@github.com:eigenhombre/trish.git => eigenhombre/trish
+    https://github.com/eigenhombre/trish.git => eigenhombre/trish
+  "
+  [url]
+  (let [cleaned (-> url
+                    str/trim
+                    (str/replace #"\.git$" ""))]
+    (cond
+      (str/starts-with? cleaned "git@github.com:")
+      (second (str/split cleaned #":"))
+
+      (str/starts-with? cleaned "https://github.com/")
+      (second (str/split cleaned #"github.com/"))
+
+      :else
+      (throw (ex-info "Unsupported git remote URL format"
+                      {:url url})))))
+
+(defn get-current-repo
+  "
+  Get the GitHub repository name for the current directory by
+  reading the git remote URL.
+  Returns nil if not a git repo or no remote is configured.
+  "
+  []
+  (let [result (shell/sh "git" "remote" "get-url" "origin")]
+    (if (zero? (:exit result))
+      (try
+        (git-remote-url->repo (:out result))
+        (catch Exception e
+          (println "Error parsing git remote URL:" (.getMessage e))
+          nil))
+      nil)))
+
 (defn issue-label-names [issue]
   (map :name (:labels issue)))
 
@@ -372,6 +410,22 @@
     (send-slack-notification
      (str "Closed " (issue-link repo number) ": " title))))
 
+(defn file-issue
+  "
+  File a new issue in the current repository with the given title
+  and empty body.
+  "
+  [title & {:keys [verbose]}]
+  (if-let [repo (get-current-repo)]
+    (let [issue-num (fetch/create-issue repo
+                                        title
+                                        :body ""
+                                        :verbose verbose)]
+      (send-slack-notification
+       (str "Filed " (issue-link repo issue-num) ": " title))
+      (println issue-num))
+    (println "Error: not a git repository or no remote configured.")))
+
 (defn- read-from-editor
   "
   Launch $VISUAL or $EDITOR with a temp file and return the saved text.
@@ -563,7 +617,8 @@
     :id :comment]
    [nil "--plain" "Read comment from stdin (skip editor)"]
    [nil "--show ISSUE" "Show detailed issue information"
-    :id :show]])
+    :id :show]
+   ["-f" "--file" "File new issue in current repo (title from args)"]])
 
 (defn print-issues! [coll]
   (run! print coll)
@@ -607,6 +662,12 @@
                           :verbose verbose
                           :skip-editor? (:plain options))
         (println "Error: --comment requires an issue number"))
+
+      ;; Handle file option (uses positional arguments as title):
+      (:file options)
+      (if (seq arguments)
+        (file-issue (str/join " " arguments) :verbose verbose)
+        (println "Error: --file requires a title"))
 
       ;; Handle positional arguments (issue numbers to open):
       (seq arguments)

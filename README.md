@@ -79,6 +79,9 @@ Add to your `~/.bashrc` or `~/.zshrc` to persist.
     trish -t TAG ISSUE         # Add arbitrary tag to issue
     trish -x TAG ISSUE         # Remove tag from issue
     trish -C ISSUE             # Add a comment to an issue
+    trish -C ISSUE --plain     # Add a comment from stdin (no editor)
+    trish --show ISSUE         # Show detailed issue info with comments
+    trish -f "Issue title"     # File new issue in current repo
 
 ### Opening in Browser
 
@@ -114,6 +117,11 @@ Pass multiple issue numbers to open several issues:
     trish -o                   # View on-deck issues
     trish --workon 789         # Start on #789
     trish --mkondeck 234       # Add #234 to queue for later
+
+### File New Issues
+
+    cd /path/to/your/repo
+    trish -f "Fix login bug"   # Creates issue in current repo's GitHub
 
 ## Configuration
 

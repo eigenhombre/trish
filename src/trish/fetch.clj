@@ -188,6 +188,26 @@
         :body
         :id)))
 
+(defn create-issue
+  "
+  Create a new GitHub issue with the given title and body.
+  Returns the issue number.
+  "
+  [repo title & {:keys [body verbose]}]
+  (let [token (gh-token)
+        url (str "https://api.github.com/repos/" repo "/issues")
+        payload (cond-> {:title title}
+                  body (assoc :body body))
+        json-body (json/generate-string payload)]
+    (when verbose
+      (println "POST" url "<-" json-body))
+    (-> (http/post url
+                   {:headers (default-headers token)
+                    :body json-body
+                    :as :json})
+        :body
+        :number)))
+
 (defn fetch-single-issue
   "
   Fetch detailed information for a single GitHub issue.
