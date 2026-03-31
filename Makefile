@@ -1,11 +1,15 @@
 SOURCES := $(shell find src -name '*.clj')
 RESOURCES := $(wildcard resources/*.edn)
 
-trish.jar: $(SOURCES) $(RESOURCES) deps.edn build.clj
-	./build.sh
+.PHONY: uber
+uber: trish.jar
 
-.PHONY: uberjar
-uberjar: trish.jar
+trish.jar: $(SOURCES) $(RESOURCES) deps.edn build.clj
+	clojure -T:build uber
+
+.PHONY: deps
+deps:
+	clojure -P
 
 .PHONY: install
 install: trish.jar
@@ -19,6 +23,10 @@ install: trish.jar
 .PHONY: run
 run:
 	clojure -M:run
+
+.PHONY: docker
+docker:
+	docker build -t trish .
 
 .PHONY: clean
 clean:

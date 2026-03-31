@@ -11,9 +11,9 @@
   (:gen-class))
 
 (def repos
-  (if-let [repos-file (io/resource "repos.edn")]
-    (edn/read-string (slurp repos-file))
-    (throw (ex-info "repos.edn not found in resources directory" {}))))
+  (delay (if-let [repos-file (io/resource "repos.edn")]
+           (edn/read-string (slurp repos-file))
+           (throw (ex-info "repos.edn not found in resources directory" {})))))
 
 (def title-segment-length 35)
 (def default-user "eigenhombre")
@@ -183,17 +183,17 @@
   (issue-has-label? "bug" issue))
 
 (defn all-no-pr-issues [& {:keys [verbose]}]
-  (->> (all-fetches repos :verbose verbose)
+  (->> (all-fetches @repos :verbose verbose)
        all-issues
        (remove is-pr?)))
 
 (defn all-open-no-pr-issues [& {:keys [verbose]}]
-  (->> (all-fetches repos :state "open" :verbose verbose)
+  (->> (all-fetches @repos :state "open" :verbose verbose)
        all-issues
        (remove is-pr?)))
 
 (defn my-issues [& {:keys [verbose]}]
-  (->> (all-fetches repos
+  (->> (all-fetches @repos
                     :verbose verbose
                     :state "open"
                     :assignee "eigenhombre")
@@ -727,7 +727,7 @@
         (present-issues issues options :sort-key :updated_at))
 
       (:in-progress options)
-      (let [issues (->> (all-fetches repos :state "open" :verbose verbose)
+      (let [issues (->> (all-fetches @repos :state "open" :verbose verbose)
                         all-issues
                         (remove is-pr?)
                         (map issue-summary)
@@ -735,7 +735,7 @@
         (present-issues issues options))
 
       (:recent options)
-      (let [issues (->> (all-fetches repos :state "open" :verbose verbose)
+      (let [issues (->> (all-fetches @repos :state "open" :verbose verbose)
                         all-issues
                         (remove is-pr?)
                         (map issue-summary)
@@ -749,7 +749,7 @@
                           (:bugs options))
                     "all"
                     "closed")
-            non-pr-raw-issues (->> (all-fetches repos
+            non-pr-raw-issues (->> (all-fetches @repos
                                                 :state state
                                                 :verbose verbose)
                                    all-issues
