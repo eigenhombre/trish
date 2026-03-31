@@ -624,6 +624,25 @@
   (run! print coll)
   (flush))
 
+(defn count-issues-by-month
+  "
+  Count issues grouped by year-month from their closed_at dates.
+  "
+  [issues]
+  (frequencies (map #(time/extract-year-month (:closed_at %)) issues)))
+
+(defn format-month-summary
+  "
+  Format a summary line of issue counts for current month and 2
+  months back.
+  "
+  [issues]
+  (let [month-counts (count-issues-by-month issues)
+        months (time/get-recent-months 2)
+        parts (for [ym months]
+                (str (time/month-name ym) ": " (get month-counts ym 0)))]
+    (str "\n" (str/join ", " parts))))
+
 (defn present-issues
   "
   Common presentation logic for issues: apply bugs filter, sort, open in
@@ -740,11 +759,14 @@
           (let [summarized (map issue-summary non-pr-raw-issues)]
             (if (:on-deck options)
               (present-issues (filter on-deck-issue? summarized) options)
-              (present-issues (->> summarized
-                                   (filter closed-by-me?)
-                                   (filter #(recently-closed-issue? 63 %)))
-                              options
-                              :sort-key :closed_at))))))))
+              (let [recent-closed (->> summarized
+                                       (filter closed-by-me?)
+                                       (filter #(recently-closed-issue?
+                                                 63 %)))]
+                (present-issues recent-closed
+                                options
+                                :sort-key :closed_at)
+                (println (format-month-summary recent-closed))))))))))
 
 (defn run-main [& args]
   (let [{:keys [options arguments summary errors]}
