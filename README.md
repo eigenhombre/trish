@@ -58,6 +58,7 @@ Add to your `~/.bashrc` or `~/.zshrc` to persist.
     trish                      # Show recently closed issues (63 days)
     trish -p, --in-progress    # Show issues tagged "in-progress"
     trish -o, --on-deck        # Show issues tagged "on-deck"
+    trish --on-deck --unsized  # Show on-deck issues with no t-shirt size
     trish -r, --recent         # Show recently updated issues (30 days)
     trish --my-issues          # Show issues assigned to you
     trish -b, --bugs           # Show issues tagged "bug"

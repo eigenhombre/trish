@@ -182,6 +182,13 @@
 (defn bug-issue? [issue]
   (issue-has-label? "bug" issue))
 
+(defn unsized-issue?
+  "
+  True if issue has no t-shirt-* sizing label.
+  "
+  [issue]
+  (not-any? #(str/starts-with? % "t-shirt-") (:labels issue)))
+
 (defn all-no-pr-issues [& {:keys [verbose]}]
   (->> (all-fetches @repos :verbose verbose)
        all-issues
@@ -604,6 +611,7 @@
    ["-h" "--help" "Display help and exit"]
    ["-p" "--in-progress" "Show issues in progress"]
    ["-o" "--on-deck" "Show 'on deck' issues"]
+   [nil "--unsized" "With --on-deck, show only unsized issues (no t-shirt-* tag)"]
    ["-r" "--recent" "Show recent issues"]
    [nil "--my-issues" "Show issues assigned to me"]
    ["-b" "--bugs" "Show bugs (issues tagged with 'bug')"]
@@ -695,9 +703,19 @@
 
       ;; Handle size option (uses positional arguments):
       (:size options)
-      (when (seq arguments)
+      (if (seq arguments)
         (doseq [issue arguments]
-          (size-issue (:size options) issue :verbose verbose)))
+          (size-issue (:size options) issue :verbose verbose))
+        (let [label (str "t-shirt-" (:size options))
+              sized-on-deck (->> (all-fetches @repos
+                                              :state "all"
+                                              :verbose verbose)
+                                 all-issues
+                                 (remove is-pr?)
+                                 (map issue-summary)
+                                 (filter on-deck-issue?)
+                                 (filter #(issue-has-label? label %)))]
+          (present-issues sized-on-deck options)))
 
       ;; Handle comment option (uses positional argument):
       (:comment options)
@@ -783,7 +801,11 @@
           (clojure.pprint/pprint non-pr-raw-issues)
           (let [summarized (map issue-summary non-pr-raw-issues)]
             (if (:on-deck options)
-              (present-issues (filter on-deck-issue? summarized) options)
+              (let [on-deck (filter on-deck-issue? summarized)
+                    filtered (if (:unsized options)
+                               (filter unsized-issue? on-deck)
+                               on-deck)]
+                (present-issues filtered options))
               (let [recent-closed (->> summarized
                                        (filter closed-by-me?)
                                        (filter #(recently-closed-issue?
