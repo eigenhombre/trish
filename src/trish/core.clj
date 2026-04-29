@@ -395,6 +395,22 @@
     (send-slack-notification
      (str "Removed tag '" tag "' from " (issue-link repo number) ": " title))))
 
+(defn size-issue
+  "
+  Tag an issue with a t-shirt size label (small, medium, or large),
+  removing any existing size labels first.
+  "
+  [size issue-selector & {:keys [verbose]}]
+  (when-let [{:keys [repo number title]}
+             (open-issue-matching-issue-num issue-selector
+                                           :verbose verbose)]
+    (doseq [label ["t-shirt-small" "t-shirt-medium" "t-shirt-large"]]
+      (fetch/remove-issue-label repo number label :verbose verbose))
+    (let [label (str "t-shirt-" size)]
+      (fetch/add-issue-labels repo number [label] :verbose verbose)
+      (send-slack-notification
+       (str "Sized " (issue-link repo number) " as " size ": " title)))))
+
 (defn close-issue
   "
   Close an issue and remove workflow labels.
@@ -613,6 +629,9 @@
     :id :tag]
    ["-x" "--untag TAG" "Remove TAG from ISSUE (issue number as argument)"
     :id :untag]
+   ["-s" "--size SIZE" "Size issues as small/medium/large (issue numbers as arguments)"
+    :id :size
+    :validate [#{"small" "medium" "large"} "Size must be one of: small, medium, large"]]
    ["-C" "--comment" "Add comment to ISSUE (issue number as argument)"
     :id :comment]
    [nil "--plain" "Read comment from stdin (skip editor)"]
@@ -673,6 +692,12 @@
       (:untag options)
       (when (seq arguments)
         (untag-issue (:untag options) (first arguments) :verbose verbose))
+
+      ;; Handle size option (uses positional arguments):
+      (:size options)
+      (when (seq arguments)
+        (doseq [issue arguments]
+          (size-issue (:size options) issue :verbose verbose)))
 
       ;; Handle comment option (uses positional argument):
       (:comment options)

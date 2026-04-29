@@ -30,4 +30,4 @@ docker:
 
 .PHONY: clean
 clean:
-	rm -rf target/ trish trish.jar .cpcache/
+	rm -rf target/ trish.jar .cpcache/

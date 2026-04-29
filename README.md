@@ -78,6 +78,7 @@ Add to your `~/.bashrc` or `~/.zshrc` to persist.
     trish -u ISSUE             # Unblock issue
     trish -t TAG ISSUE         # Add arbitrary tag to issue
     trish -x TAG ISSUE         # Remove tag from issue
+    trish -s SIZE ISSUE...     # Size issue: small, medium, or large
     trish -C ISSUE             # Add a comment to an issue
     trish -C ISSUE --plain     # Add a comment from stdin (no editor)
     trish --show ISSUE         # Show detailed issue info with comments
@@ -160,6 +161,7 @@ Slack webhook URL:
 When configured, notifications are sent for:
 - Adding tags (`-t`)
 - Removing tags (`-x`)
+- Sizing issues (`-s`)
 - Starting work on an issue (`--workon`)
 - Moving issues to on-deck (`--mkondeck`)
 - Closing issues (`-c`)
