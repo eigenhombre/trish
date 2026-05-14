@@ -10,10 +10,13 @@
   (:import [java.lang IllegalArgumentException])
   (:gen-class))
 
-(def repos
+(def repo-prefix-map
   (delay (if-let [repos-file (io/resource "repos.edn")]
            (edn/read-string (slurp repos-file))
            (throw (ex-info "repos.edn not found in resources directory" {})))))
+
+(def repos
+  (delay (vals @repo-prefix-map)))
 
 (def title-segment-length 35)
 (def default-user "eigenhombre")
@@ -212,6 +215,18 @@
     (parse-long x)
     (catch IllegalArgumentException _)))
 
+(defn- parse-prefixed-issue
+  "
+  Parse a prefixed issue selector like 'stm186' into [repo number].
+  Returns nil if the selector does not match a known prefix.
+  "
+  [issue-selector]
+  (when-let [[_ prefix num-str]
+             (re-matches #"([a-z][a-z0-9]{2})(\d+)"
+                         (str/lower-case issue-selector))]
+    (when-let [repo (get @repo-prefix-map prefix)]
+      [repo (parse-long num-str)])))
+
 (defn repo-issue-num
   "
   Parse an issue selector like 'wipacrepo/fh_icm_api/99' into repo and
@@ -225,13 +240,15 @@
 
 (defn issue-matches
   "
-  Check if an issue matches a selector (either a plain number or
-  org/repo/number format).
+  Check if an issue matches a selector (plain number, org/repo/number,
+  or prefix+number format like 'stm186').
   "
   [{:keys [repo number]} issue-selector]
   (if-let [num (maybe-parse-long issue-selector)]
     (= number num)
-    (let [[selector-repo selector-num] (repo-issue-num issue-selector)]
+    (let [[selector-repo selector-num]
+          (or (parse-prefixed-issue issue-selector)
+              (repo-issue-num issue-selector))]
       (when (and selector-repo selector-num)
         (and (= (str/lower-case repo)
                 (str/lower-case selector-repo))
@@ -611,7 +628,8 @@
    ["-h" "--help" "Display help and exit"]
    ["-p" "--in-progress" "Show issues in progress"]
    ["-o" "--on-deck" "Show 'on deck' issues"]
-   [nil "--unsized" "With --on-deck, show only unsized issues (no t-shirt-* tag)"]
+   [nil "--unsized"
+    "With --on-deck, show only unsized issues (no t-shirt-* tag)"]
    ["-r" "--recent" "Show recent issues"]
    [nil "--my-issues" "Show issues assigned to me"]
    ["-b" "--bugs" "Show bugs (issues tagged with 'bug')"]
@@ -637,9 +655,11 @@
     :id :tag]
    ["-x" "--untag TAG" "Remove TAG from ISSUE (issue number as argument)"
     :id :untag]
-   ["-s" "--size SIZE" "Size issues as small/medium/large (issue numbers as arguments)"
+   ["-s" "--size SIZE"
+    "Size issues as small/medium/large (issue numbers as arguments)"
     :id :size
-    :validate [#{"small" "medium" "large"} "Size must be one of: small, medium, large"]]
+    :validate [#{"small" "medium" "large"}
+               "Size must be one of: small, medium, large"]]
    ["-C" "--comment" "Add comment to ISSUE (issue number as argument)"
     :id :comment]
    [nil "--plain" "Read comment from stdin (skip editor)"]
