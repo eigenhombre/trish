@@ -257,10 +257,15 @@
 (defn open-issue-matching-issue-num
   "Find an open issue matching the given issue number or selector."
   [issue-selector & {:keys [verbose]}]
-  (->> (all-no-pr-issues :verbose verbose)
-       (map issue-summary)
-       (filter #(issue-matches % issue-selector))
-       first))
+  (if-let [[repo number]
+           (or (parse-prefixed-issue issue-selector)
+               (repo-issue-num issue-selector))]
+    (some-> (fetch/fetch-single-issue repo number :verbose verbose)
+            issue-summary)
+    (->> (all-no-pr-issues :verbose verbose)
+         (map issue-summary)
+         (filter #(issue-matches % issue-selector))
+         first)))
 
 (defn open-issues
   "Find issues by number (for any of the repos in repos),

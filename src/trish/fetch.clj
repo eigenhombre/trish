@@ -40,26 +40,6 @@
                  assignee (conj ["assignee" assignee]))]
     (build-url (str "/repos/" repo "/issues") params)))
 
-(defn fetch-issues
-  "
-  Fetch issues from a GitHub repository.
-  "
-  [repo & {:keys [page state assignee verbose]
-           :or {page 1}}]
-  (let [token (gh-token)
-        url (github-issues-url repo
-                               :page page
-                               :state state
-                               :assignee assignee)]
-    (when verbose
-      (println "GET" url))
-    (-> (http/get url
-                  ;; TODO: use default-headers:
-                  {:headers {"Authorization" (str "Bearer " token)
-                             "Accept" "application/vnd.github+json"}
-                   :as :json})
-        :body)))
-
 (defn issue-labels-url
   "
   Build a URL for managing labels on an issue.
@@ -256,6 +236,21 @@
                              url)
                         {:url url :page page}
                         e))))))
+
+(defn fetch-issues
+  "
+  Fetch issues from a GitHub repository, following pagination.
+  "
+  [repo & {:keys [state assignee verbose]}]
+  (let [token (gh-token)
+        url-fn (fn [page]
+                 (github-issues-url repo
+                                    :page page
+                                    :state state
+                                    :assignee assignee))]
+    (fetch-paginated url-fn
+                     (default-headers token)
+                     :verbose verbose)))
 
 (defn fetch-issue-comments
   "
